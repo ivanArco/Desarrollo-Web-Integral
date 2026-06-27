@@ -1,0 +1,12 @@
+{
+  "name": "node-01-soap-client",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "soap": "^1.1.11"
+  }
+}
