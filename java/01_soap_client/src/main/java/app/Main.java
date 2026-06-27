@@ -1,78 +1,37 @@
 package app;
 
-import java.io.IOException;
-import java.io.OutputStream;
-import java.net.InetSocketAddress;
-import java.net.URI;
-import java.net.URLDecoder;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import okhttp3.*;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.Optional;
-import java.util.concurrent.Executors;
+
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpHandler;
-import com.sun.net.httpserver.HttpServer;
+
+import static spark.Spark.*;
 
 public class Main {
-    private static final HttpClient HTTP = HttpClient.newHttpClient();
-    private static final Pattern RESULT_PATTERN = Pattern.compile(
+    private static final OkHttpClient HTTP = new OkHttpClient();
+    private static final Pattern SOAP_RESULT_PATTERN = Pattern.compile(
             "<(?:\\w+:)?NumberToWordsResult>(.*?)</(?:\\w+:)?NumberToWordsResult>",
             Pattern.DOTALL
     );
-    private static final int PORT = 8501;
+    private static final Pattern TRANSLATED_TEXT_PATTERN = Pattern.compile("\\\"translatedText\\\"\\s*:\\s*\\\"(.*?)\\\"");
 
-    public static void main(String[] args) throws IOException {
-        HttpServer server = HttpServer.create(new InetSocketAddress(PORT), 0);
-        server.createContext("/", new NumberHandler());
-        server.setExecutor(Executors.newFixedThreadPool(4));
-        server.start();
+    public static void main(String[] args) {
+        port(8502);
+        exception(Exception.class, (e, req, res) -> {
+            res.status(500);
+            res.type("text/plain; charset=utf-8");
+            res.body("Error interno: " + e.getMessage());
+        });
 
-        System.out.println("Servidor iniciado en http://localhost:" + PORT + "/?n=10");
-    }
-
-    private static class NumberHandler implements HttpHandler {
-        @Override
-        public void handle(HttpExchange exchange) throws IOException {
-            if (!"GET".equalsIgnoreCase(exchange.getRequestMethod())) {
-                sendText(exchange, 405, "Solo se permite GET");
-                return;
-            }
-
-            String query = Optional.ofNullable(exchange.getRequestURI().getRawQuery()).orElse("");
-            String n = getQueryParam(query, "n");
+        get("/", (req, res) -> {
+            String n = req.queryParams("n");
             if (n == null || n.isBlank()) {
-                sendText(exchange, 400, "Falta parametro n");
-                return;
+                res.status(400);
+                return "Falta parametro n";
             }
 
-            try {
-                String result = numberToWords(n.trim());
-                sendText(exchange, 200, result);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                sendText(exchange, 500, "Error interno");
-            } catch (Exception e) {
-                sendText(exchange, 500, "Error SOAP: " + e.getMessage());
-            }
-        }
-    }
-
-    private static String getQueryParam(String query, String key) {
-        return Arrays.stream(query.split("&"))
-                .map(part -> part.split("=", 2))
-                .filter(parts -> parts.length == 2)
-                .filter(parts -> key.equals(URLDecoder.decode(parts[0], StandardCharsets.UTF_8)))
-                .map(parts -> URLDecoder.decode(parts[1], StandardCharsets.UTF_8))
-                .findFirst()
-                .orElse(null);
-    }
-
-    private static String numberToWords(String n) throws IOException, InterruptedException {
         String soap = "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
                 + "<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" "
                 + "xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" "
@@ -80,29 +39,68 @@ public class Main {
                 + "<soap:Body><NumberToWords xmlns=\"http://www.dataaccess.com/webservicesserver/\">"
                 + "<ubiNum>" + n + "</ubiNum></NumberToWords></soap:Body></soap:Envelope>";
 
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("https://www.dataaccess.com/webservicesserver/NumberConversion.wso"))
-                .header("Content-Type", "text/xml; charset=utf-8")
-                .header("SOAPAction", "http://www.dataaccess.com/webservicesserver/NumberToWords")
-                .POST(HttpRequest.BodyPublishers.ofString(soap))
-                .build();
+            RequestBody body = RequestBody.create(soap, MediaType.parse("text/xml; charset=utf-8"));
+            Request request = new Request.Builder()
+                    .url("https://www.dataaccess.com/webservicesserver/NumberConversion.wso")
+                    .addHeader("SOAPAction", "http://www.dataaccess.com/webservicesserver/NumberToWords")
+                    .post(body)
+                    .build();
 
-        HttpResponse<String> response = HTTP.send(request, HttpResponse.BodyHandlers.ofString());
-        if (response.statusCode() >= 400) {
-            throw new IOException("HTTP " + response.statusCode());
-        }
+            String english = "";
+            try (Response response = HTTP.newCall(request).execute()) {
+                String xml = response.body() != null ? response.body().string() : "";
+                Matcher m = SOAP_RESULT_PATTERN.matcher(xml);
+                english = m.find() ? m.group(1).trim() : "";
+            }
 
-        String xml = response.body() != null ? response.body() : "";
-        Matcher m = RESULT_PATTERN.matcher(xml);
-        return m.find() ? m.group(1).trim() : "Sin resultado";
+            if (english.isBlank()) {
+                res.status(502);
+                return "No se pudo obtener resultado del SOAP";
+            }
+
+            try {
+                String translated = translateWithMyMemory(english);
+                return translated.isBlank() ? english : translated;
+            } catch (Exception e) {
+                res.status(500);
+                return "Error de traduccion externa: " + e.getMessage();
+            }
+        });
+
+        awaitInitialization();
+        System.out.println("Servidor iniciado en http://localhost:8502/?n=10");
     }
 
-    private static void sendText(HttpExchange exchange, int statusCode, String body) throws IOException {
-        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
-        exchange.getResponseHeaders().set("Content-Type", "text/plain; charset=utf-8");
-        exchange.sendResponseHeaders(statusCode, bytes.length);
-        try (OutputStream os = exchange.getResponseBody()) {
-            os.write(bytes);
+    private static String translateWithMyMemory(String text) throws Exception {
+        String encoded = URLEncoder.encode(text, StandardCharsets.UTF_8);
+        String url = "https://api.mymemory.translated.net/get?q=" + encoded + "&langpair=en|es";
+
+        Request request = new Request.Builder()
+                .url(url)
+                .get()
+                .build();
+
+        try (Response response = HTTP.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                throw new Exception("HTTP " + response.code());
+            }
+            String json = response.body() != null ? response.body().string() : "";
+            Matcher m = TRANSLATED_TEXT_PATTERN.matcher(json);
+            if (!m.find()) {
+                return "";
+            }
+            return decodeJsonString(m.group(1));
         }
+    }
+
+    private static String decodeJsonString(String value) {
+        return value
+                .replace("\\u003c", "<")
+                .replace("\\u003e", ">")
+                .replace("\\u0027", "'")
+                .replace("\\n", "\n")
+                .replace("\\\"", "\"")
+                .replace("\\/", "/")
+                .trim();
     }
 }
