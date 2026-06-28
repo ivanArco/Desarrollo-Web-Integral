@@ -1,6 +1,4 @@
 use axum::{extract::Query, response::IntoResponse, routing::get, Router};
-use regex::Regex;
-use serde_json::Value;
 use std::{collections::HashMap, net::SocketAddr};
 
 #[tokio::main]
@@ -24,91 +22,120 @@ async fn handler(Query(params): Query<HashMap<String, String>>) -> impl IntoResp
         );
     }
 
-    let envelope = format!(
-        "<?xml version=\"1.0\" encoding=\"utf-8\"?>\
-        <soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" \
-        xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" \
-        xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">\
-        <soap:Body><NumberToWords xmlns=\"http://www.dataaccess.com/webservicesserver/\">\
-        <ubiNum>{}</ubiNum></NumberToWords></soap:Body></soap:Envelope>",
-        n
-    );
-
-    let client = reqwest::Client::new();
-    let xml = match client
-        .post("https://www.dataaccess.com/webservicesserver/NumberConversion.wso")
-        .header("Content-Type", "text/xml; charset=utf-8")
-        .header("SOAPAction", "http://www.dataaccess.com/webservicesserver/NumberToWords")
-        .body(envelope)
-        .send()
-        .await
-    {
-        Ok(resp) => match resp.text().await {
-            Ok(body) => body,
-            Err(err) => {
-                return (
-                    axum::http::StatusCode::BAD_GATEWAY,
-                    format!("Error leyendo respuesta SOAP: {}", err),
-                )
-            }
-        },
-        Err(err) => {
+    let value = match n.parse::<u64>() {
+        Ok(v) => v,
+        Err(_) => {
             return (
-                axum::http::StatusCode::BAD_GATEWAY,
-                format!("Error llamando servicio SOAP: {}", err),
+                axum::http::StatusCode::BAD_REQUEST,
+                "Parametro n fuera de rango".to_string(),
             )
         }
     };
 
-    let re = Regex::new(r"<(?:\w+:)?NumberToWordsResult>(.*?)</(?:\w+:)?NumberToWordsResult>").unwrap();
-    let english = re
-        .captures(&xml)
-        .and_then(|c| c.get(1))
-        .map(|m| m.as_str().trim().to_string())
-        .unwrap_or_else(|| "Sin resultado".to_string());
-
-    let spanish = match translate_en_to_es(&client, &english).await {
-        Ok(text) if !text.trim().is_empty() => text,
-        _ => english,
-    };
-
-    (axum::http::StatusCode::OK, spanish)
+    (axum::http::StatusCode::OK, to_es(value))
 }
 
-async fn translate_en_to_es(client: &reqwest::Client, text: &str) -> Result<String, String> {
-    let url = reqwest::Url::parse_with_params(
-        "https://translate.googleapis.com/translate_a/single",
-        &[
-            ("client", "gtx"),
-            ("sl", "en"),
-            ("tl", "es"),
-            ("dt", "t"),
-            ("q", text),
-        ],
-    )
-    .map_err(|err| err.to_string())?;
-
-    let body = client
-        .get(url)
-        .send()
-        .await
-        .map_err(|err| err.to_string())?
-        .text()
-        .await
-        .map_err(|err| err.to_string())?;
-
-    let parsed: Value = serde_json::from_str(&body).map_err(|err| err.to_string())?;
-    let chunks = parsed
-        .get(0)
-        .and_then(|v| v.as_array())
-        .ok_or("Respuesta de traduccion invalida")?;
-
-    let mut out = String::new();
-    for chunk in chunks {
-        if let Some(piece) = chunk.get(0).and_then(|v| v.as_str()) {
-            out.push_str(piece);
-        }
+fn to_es(n: u64) -> String {
+    if n == 0 {
+        return "cero".to_string();
     }
 
-    Ok(out.trim().to_string())
+    if n < 20 {
+        return [
+            "cero",
+            "uno",
+            "dos",
+            "tres",
+            "cuatro",
+            "cinco",
+            "seis",
+            "siete",
+            "ocho",
+            "nueve",
+            "diez",
+            "once",
+            "doce",
+            "trece",
+            "catorce",
+            "quince",
+            "dieciseis",
+            "diecisiete",
+            "dieciocho",
+            "diecinueve",
+        ][n as usize]
+            .to_string();
+    }
+
+    if n < 30 {
+        return if n == 20 {
+            "veinte".to_string()
+        } else {
+            format!("veinti{}", to_es(n - 20))
+        };
+    }
+
+    if n < 100 {
+        let tens = [
+            "",
+            "",
+            "veinte",
+            "treinta",
+            "cuarenta",
+            "cincuenta",
+            "sesenta",
+            "setenta",
+            "ochenta",
+            "noventa",
+        ];
+        let dec = n / 10;
+        let uni = n % 10;
+        return if uni == 0 {
+            tens[dec as usize].to_string()
+        } else {
+            format!("{} y {}", tens[dec as usize], to_es(uni))
+        };
+    }
+
+    if n == 100 {
+        return "cien".to_string();
+    }
+
+    if n < 1000 {
+        let hundreds = [
+            "",
+            "ciento",
+            "doscientos",
+            "trescientos",
+            "cuatrocientos",
+            "quinientos",
+            "seiscientos",
+            "setecientos",
+            "ochocientos",
+            "novecientos",
+        ];
+        let cen = n / 100;
+        let rest = n % 100;
+        return if rest == 0 {
+            hundreds[cen as usize].to_string()
+        } else {
+            format!("{} {}", hundreds[cen as usize], to_es(rest))
+        };
+    }
+
+    if n < 1_000_000 {
+        let mil = n / 1000;
+        let rest = n % 1000;
+        let left = if mil == 1 {
+            "mil".to_string()
+        } else {
+            format!("{} mil", to_es(mil))
+        };
+        return if rest == 0 {
+            left
+        } else {
+            format!("{} {}", left, to_es(rest))
+        };
+    }
+
+    "fuera de rango".to_string()
 }
