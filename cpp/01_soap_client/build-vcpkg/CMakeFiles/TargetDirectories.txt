@@ -1,0 +1,3 @@
+C:/Users/ivana/OneDrive/Documents/Desarrollo Web Integral/Unidad 2/Producto 2/cpp/01_soap_client/build-vcpkg/CMakeFiles/app.dir
+C:/Users/ivana/OneDrive/Documents/Desarrollo Web Integral/Unidad 2/Producto 2/cpp/01_soap_client/build-vcpkg/CMakeFiles/edit_cache.dir
+C:/Users/ivana/OneDrive/Documents/Desarrollo Web Integral/Unidad 2/Producto 2/cpp/01_soap_client/build-vcpkg/CMakeFiles/rebuild_cache.dir

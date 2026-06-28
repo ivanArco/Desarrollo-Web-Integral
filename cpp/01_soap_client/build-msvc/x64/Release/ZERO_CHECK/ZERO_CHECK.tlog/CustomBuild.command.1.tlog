@@ -1,0 +1,10 @@
+^C:\USERS\IVANA\ONEDRIVE\DOCUMENTS\DESARROLLO WEB INTEGRAL\UNIDAD 2\PRODUCTO 2\CPP\01_SOAP_CLIENT\BUILD-MSVC\CMAKEFILES\48D91EAD20861A18796DBD21D28435EF\GENERATE.STAMP.RULE
+setlocal
+C:\Strawberry\c\bin\cmake.exe "-SC:/Users/ivana/OneDrive/Documents/Desarrollo Web Integral/Unidad 2/Producto 2/cpp/01_soap_client" "-BC:/Users/ivana/OneDrive/Documents/Desarrollo Web Integral/Unidad 2/Producto 2/cpp/01_soap_client/build-msvc" --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file "C:/Users/ivana/OneDrive/Documents/Desarrollo Web Integral/Unidad 2/Producto 2/cpp/01_soap_client/build-msvc/cpp_01_soap_client.sln"
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

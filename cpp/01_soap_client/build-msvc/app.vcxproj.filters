@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <ClCompile Include="C:\Users\ivana\OneDrive\Documents\Desarrollo Web Integral\Unidad 2\Producto 2\cpp\01_soap_client\main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\ivana\OneDrive\Documents\Desarrollo Web Integral\Unidad 2\Producto 2\cpp\01_soap_client\CMakeLists.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{BB0CC9C1-C1B6-356D-887D-73D4821862B1}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>

@@ -1,0 +1,13 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="17.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <CustomBuild Include="C:\Users\ivana\OneDrive\Documents\Desarrollo Web Integral\Unidad 2\Producto 2\cpp\01_soap_client\build-msvc\CMakeFiles\48d91ead20861a18796dbd21d28435ef\generate.stamp.rule">
+      <Filter>CMake Rules</Filter>
+    </CustomBuild>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="CMake Rules">
+      <UniqueIdentifier>{7C3EA5BD-B7CF-37B7-9068-C60CA50B148D}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+</Project>
