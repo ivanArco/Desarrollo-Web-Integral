@@ -1,90 +1,81 @@
-#include <string>
+#include <array>
 #include <iostream>
+#include <string>
 
 #include <httplib.h>
-#include <cpr/cpr.h>
-#include <tinyxml2.h>
 
-static std::string html_unescape(std::string text) {
-    struct Entity { const char* from; const char* to; };
-    static const Entity entities[] = {
-        {"&amp;", "&"},
-        {"&lt;", "<"},
-        {"&gt;", ">"},
-        {"&quot;", "\""},
-        {"&#39;", "'"},
+static std::string to_es(unsigned long long n) {
+    static const std::array<std::string, 20> units = {
+        "cero", "uno", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho", "nueve",
+        "diez", "once", "doce", "trece", "catorce", "quince", "dieciséis", "diecisiete", "dieciocho", "diecinueve"
     };
 
-    for (const auto& entity : entities) {
-        std::string::size_type pos = 0;
-        while ((pos = text.find(entity.from, pos)) != std::string::npos) {
-            text.replace(pos, std::strlen(entity.from), entity.to);
-            pos += std::strlen(entity.to);
+    static const std::array<std::string, 10> tens = {
+        "", "", "veinte", "treinta", "cuarenta", "cincuenta", "sesenta", "setenta", "ochenta", "noventa"
+    };
+
+    static const std::array<std::string, 10> hundreds = {
+        "", "ciento", "doscientos", "trescientos", "cuatrocientos", "quinientos", "seiscientos", "setecientos", "ochocientos", "novecientos"
+    };
+
+    if (n == 0) {
+        return "cero";
+    }
+
+    if (n < 20) {
+        return units[static_cast<std::size_t>(n)];
+    }
+
+    if (n < 30) {
+        switch (n) {
+            case 20: return "veinte";
+            case 21: return "veintiuno";
+            case 22: return "veintidós";
+            case 23: return "veintitrés";
+            case 24: return "veinticuatro";
+            case 25: return "veinticinco";
+            case 26: return "veintiséis";
+            case 27: return "veintisiete";
+            case 28: return "veintiocho";
+            case 29: return "veintinueve";
+            default: break;
         }
     }
 
-    return text;
+    if (n < 100) {
+        const auto dec = n / 10;
+        const auto uni = n % 10;
+        return uni == 0 ? tens[static_cast<std::size_t>(dec)]
+                        : tens[static_cast<std::size_t>(dec)] + std::string(" y ") + units[static_cast<std::size_t>(uni)];
+    }
+
+    if (n == 100) {
+        return "cien";
+    }
+
+    if (n < 1000) {
+        const auto cen = n / 100;
+        const auto rest = n % 100;
+        return rest == 0 ? hundreds[static_cast<std::size_t>(cen)]
+                         : hundreds[static_cast<std::size_t>(cen)] + std::string(" ") + to_es(rest);
+    }
+
+    if (n < 1000000) {
+        const auto mil = n / 1000;
+        const auto rest = n % 1000;
+        const auto left = mil == 1 ? std::string("mil") : to_es(mil) + " mil";
+        return rest == 0 ? left : left + " " + to_es(rest);
+    }
+
+    return "fuera de rango";
 }
 
-static std::string translate_en_to_es(const std::string& english_text) {
-    auto r = cpr::Get(
-        cpr::Url{"https://translate.googleapis.com/translate_a/single"},
-        cpr::Parameters{{"client", "gtx"}, {"sl", "en"}, {"tl", "es"}, {"dt", "t"}, {"q", english_text}}
-    );
-
-    if (r.status_code != 200 || r.text.empty()) {
-        return english_text;
+static std::string local_number_to_words(const std::string& n) {
+    try {
+        return to_es(std::stoull(n));
+    } catch (...) {
+        return "Parametro n invalido";
     }
-
-    const std::string prefix = R"([[[")";
-    const auto start = r.text.find(prefix);
-    if (start == std::string::npos) {
-        return english_text;
-    }
-
-    const auto first_quote = start + prefix.size();
-    const auto second_quote = r.text.find("\"", first_quote);
-    if (second_quote == std::string::npos) {
-        return english_text;
-    }
-
-    return html_unescape(r.text.substr(first_quote, second_quote - first_quote));
-}
-
-static std::string soap_number_to_words(const std::string& n) {
-    const std::string envelope =
-        "<?xml version=\"1.0\" encoding=\"utf-8\"?>"
-        "<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" "
-        "xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" "
-        "xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">"
-        "<soap:Body><NumberToWords xmlns=\"http://www.dataaccess.com/webservicesserver/\">"
-        "<ubiNum>" + n + "</ubiNum></NumberToWords></soap:Body></soap:Envelope>";
-
-    auto r = cpr::Post(
-        cpr::Url{"https://www.dataaccess.com/webservicesserver/NumberConversion.wso"},
-        cpr::Header{{"Content-Type", "text/xml; charset=utf-8"}, {"SOAPAction", "http://www.dataaccess.com/webservicesserver/NumberToWords"}},
-        cpr::Body{envelope}
-    );
-
-    tinyxml2::XMLDocument doc;
-    doc.Parse(r.text.c_str());
-
-    auto* root = doc.RootElement();
-    if (!root) return "Sin resultado";
-
-    tinyxml2::XMLElement* result = nullptr;
-    for (auto* e = root->FirstChildElement(); e && !result; e = e->NextSiblingElement()) {
-        for (auto* b = e->FirstChildElement(); b && !result; b = b->NextSiblingElement()) {
-            for (auto* c = b->FirstChildElement(); c && !result; c = c->NextSiblingElement()) {
-                if (std::string(c->Name()).find("NumberToWordsResult") != std::string::npos) {
-                    result = c;
-                }
-            }
-        }
-    }
-
-    const auto english = (result && result->GetText()) ? result->GetText() : "Sin resultado";
-    return translate_en_to_es(english);
 }
 
 int main() {
@@ -96,8 +87,9 @@ int main() {
             res.set_content("Falta parametro n", "text/plain; charset=utf-8");
             return;
         }
-        auto n = req.get_param_value("n");
-        res.set_content(soap_number_to_words(n), "text/plain; charset=utf-8");
+
+        const auto n = req.get_param_value("n");
+        res.set_content(local_number_to_words(n), "text/plain; charset=utf-8");
     });
 
     std::cout << "Servidor en http://localhost:8601" << std::endl;
