@@ -1,0 +1,30 @@
+# Build artifacts - C++
+cpp/**/build-msvc/
+cpp/**/build-vcpkg/
+cpp/**/*.exe
+cpp/**/*.dll
+cpp/**/*.obj
+
+# .NET
+dotnet10/**/bin/
+dotnet10/**/obj/
+
+# Go
+golang/**/go.sum
+
+# Java / Maven
+java/**/target/
+
+# Node.js
+node/**/node_modules/
+
+# Ruby
+ruby/**/.bundle/
+
+# Rust
+rust/**/target/
+
+# General
+.DS_Store
+*.log
+*.tmp
