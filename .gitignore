@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Build artifacts - C++
 cpp/**/build-msvc/
 cpp/**/build-vcpkg/
@@ -28,3 +29,36 @@ rust/**/target/
 .DS_Store
 *.log
 *.tmp
+=======
+# General
+.DS_Store
+Thumbs.db
+
+# Node
+**/node_modules/
+
+# Ruby
+**/.bundle/
+
+# Perl
+**/local/
+
+# .NET
+**/bin/
+**/obj/
+
+# Go
+**/vendor/
+
+# Java
+**/target/
+
+# C++
+**/build/
+**/*.o
+**/*.exe
+
+# Rust
+**/target/
+Cargo.lock
+>>>>>>> 1b73654 (Agrega archivo .gitignore general del proyecto)
